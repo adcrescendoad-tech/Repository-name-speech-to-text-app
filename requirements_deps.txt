@@ -1,5 +1,1 @@
-Flask==2.3.0
-Flask-CORS==4.0.0
-google-cloud-speech==2.20.0
-google-auth-oauthlib==1.0.0
-google-auth-httplib2==0.1.1
+
