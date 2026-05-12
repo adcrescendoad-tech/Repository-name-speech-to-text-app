@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>研修レポート作成アプリ</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 900px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        .form-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .form-section h2 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-group label {
+            color: #555;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .file-input-wrapper input[type="file"] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .file-input-label {
+            display: block;
+            padding: 12px;
+            background: #667eea;
+            color: white;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: background 0.3s;
+            font-weight: 500;
+        }
+
+        .file-input-label:hover {
+            background: #5568d3;
+        }
+
+        .file-name {
+            color: #666;
+            font-size: 13px;
+            margin-top: 5px;
+            text-align: center;
+        }
+
+        .report-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .report-section h2 {
+            color: #333;
+            font-size: 18px;
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 12px;
+            border-radius: 8px;
+            display: none;
+            font-size: 14px;
+            margin-bottom: 15px;
+            border-left: 4px solid #c33;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .report-content {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 8px;
+            min-height: 200px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .report-item {
+            background: white;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+
+        .report-item strong {
+            color: #333;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .report-item span {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #d0d0d0;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            color: #667eea;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid #667eea;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .content {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 22px;
+            }
+
+            .container {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📋 研修レポート作成アプリ</h1>
+            <p>音声ファイルを自動でテキスト化。議事・連絡とレポート作成ができます。</p>
+        </div>
+
+        <div class="content">
+            <div class="form-section">
+                <h2>✍️ 入力フォーム</h2>
+                
+                <div class="form-group">
+                    <label for="trainee-name">研修者名</label>
+                    <input type="text" id="trainee-name" placeholder="例：山田太郎" />
+                </div>
+
+                <div class="form-group">
+                    <label for="trainee-date">研修日時</label>
+                    <input type="date" id="trainee-date" />
+                </div>
+
+                <div class="form-group">
+                    <label for="trainee-topic">研修テーマ</label>
+                    <input type="text" id="trainee-topic" placeholder="例：システム操作研修" />
+                </div>
+
+                <div class="form-group">
+                    <label>音声ファイルをアップロード</label>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="audio-file" accept="audio/*" />
+                        <label for="audio-file" class="file-input-label">
+                            📁 ファイルを選択・録音結果を選択
+                        </label>
+                        <div class="file-name" id="file-name"></div>
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn btn-primary" id="transcribe-btn">🎤 テキスト化</button>
+                    <button class="btn btn-secondary" id="reset-btn">リセット</button>
+                </div>
+
+                <div class="loading" id="loading">
+                    <span class="spinner"></span>処理中...
+                </div>
+            </div>
+
+            <div class="report-section">
+                <h2>📄 レポート確認</h2>
+                
+                <div class="error-message" id="error-message"></div>
+
+                <div class="report-content" id="report-content">
+                    <div style="text-align: center; color: #999; padding: 20px;">
+                        現在の内容
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn btn-primary" id="export-btn">📥 Excel出力</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'https://web-production-705a8d.up.railway.app/transcribe';
+        
+        const traineeNameInput = document.getElementById('trainee-name');
+        const traineeDateInput = document.getElementById('trainee-date');
+        const traineeTopicInput = document.getElementById('trainee-topic');
+        const audioFileInput = document.getElementById('audio-file');
+        const fileNameDisplay = document.getElementById('file-name');
+        const transcribeBtn = document.getElementById('transcribe-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const exportBtn = document.getElementById('export-btn');
+        const reportContent = document.getElementById('report-content');
+        const errorMessage = document.getElementById('error-message');
+        const loadingDiv = document.getElementById('loading');
+
+        audioFileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                fileNameDisplay.textContent = `選択ファイル: ${e.target.files[0].name}`;
+            } else {
+                fileNameDisplay.textContent = '';
+            }
+        });
+
+        transcribeBtn.addEventListener('click', transcribeAudio);
+        resetBtn.addEventListener('click', () => {
+            traineeNameInput.value = '';
+            traineeDateInput.value = '';
+            traineeTopicInput.value = '';
+            audioFileInput.value = '';
+            fileNameDisplay.textContent = '';
+            reportContent.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">現在の内容</div>';
+            errorMessage.classList.remove('show');
+        });
+
+        exportBtn.addEventListener('click', exportToExcel);
+
+        async function transcribeAudio() {
+            const file = audioFileInput.files[0];
+            if (!file) {
+                showError('ファイルを選択してください');
+                return;
+            }
+
+            loadingDiv.style.display = 'block';
+            errorMessage.classList.remove('show');
+            transcribeBtn.disabled = true;
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    body: formData,
+                    mode: 'cors'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    displayReport(data.transcript);
+                } else {
+                    showError(data.error || 'テキスト化に失敗しました');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showError(`通信エラー: ${error.message}`);
+            } finally {
+                loadingDiv.style.display = 'none';
+                transcribeBtn.disabled = false;
+            }
+        }
+
+        function displayReport(transcript) {
+            const traineeName = traineeNameInput.value || '未入力';
+            const traineeDate = traineeDateInput.value || '未入力';
+            const traineeTopic = traineeTopicInput.value || '未入力';
+
+            reportContent.innerHTML = `
+                <div class="report-item">
+                    <strong>研修者名</strong>
+                    <span>${traineeName}</span>
+                </div>
+                <div class="report-item">
+                    <strong>研修日時</strong>
+                    <span>${traineeDate}</span>
+                </div>
+                <div class="report-item">
+                    <strong>研修テーマ</strong>
+                    <span>${traineeTopic}</span>
+                </div>
+                <div class="report-item">
+                    <strong>テキスト化結果</strong>
+                    <span>${transcript}</span>
+                </div>
+            `;
+        }
+
+        function showError(message) {
+            errorMessage.textContent = '❌ エラー: ' + message;
+            errorMessage.classList.add('show');
+        }
+
+        function exportToExcel() {
+            const traineeName = traineeNameInput.value || '未入力';
+            const traineeDate = traineeDateInput.value || '未入力';
+            const traineeTopic = traineeTopicInput.value || '未入力';
+            const transcript = reportContent.textContent;
+
+            const csv = `研修レポート\n\n研修者名,${traineeName}\n研修日時,${traineeDate}\n研修テーマ,${traineeTopic}\n\nテキスト化結果\n${transcript}`;
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', `研修レポート_${Date.now()}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        const today = new Date().toISOString().split('T')[0];
+        traineeDateInput.value = today;
+    </script>
+</body>
+</html>
