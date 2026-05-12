@@ -1,5 +1,5 @@
 {
-     "build": {
-       "builder": "paketo"
-     }
-   }
+  "buildCommand": "",
+  "installCommand": "",
+  "outputDirectory": "."
+}
