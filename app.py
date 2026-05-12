@@ -9,23 +9,27 @@ app = Flask(__name__)
 CORS(app)
 
 # Environment Variable から認証情報を読み込む
+credentials_dict = None
 try:
     creds_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
     if creds_json:
+        print(f"DEBUG: GOOGLE_CREDENTIALS_JSON found, length: {len(creds_json)}")
         credentials_dict = json.loads(creds_json)
+        print(f"DEBUG: Credentials loaded successfully")
     else:
-        raise ValueError("GOOGLE_CREDENTIALS_JSON is not set")
+        print("DEBUG: GOOGLE_CREDENTIALS_JSON not found in environment")
 except Exception as e:
-    print(f"Error loading credentials: {e}")
-    credentials_dict = {}
+    print(f"DEBUG: Error loading credentials: {e}")
 
 # Google Cloud Speech クライアントを初期化
-try:
-    credentials = service_account.Credentials.from_service_account_info(credentials_dict)
-    client = speech_v1.SpeechClient(credentials=credentials)
-except Exception as e:
-    print(f"Error initializing Speech Client: {e}")
-    client = None
+client = None
+if credentials_dict:
+    try:
+        credentials = service_account.Credentials.from_service_account_info(credentials_dict)
+        client = speech_v1.SpeechClient(credentials=credentials)
+        print("DEBUG: Speech Client initialized successfully")
+    except Exception as e:
+        print(f"DEBUG: Error initializing Speech Client: {e}")
 
 @app.route('/', methods=['GET'])
 def index():
@@ -37,7 +41,7 @@ def transcribe():
         if not client:
             return jsonify({
                 'success': False,
-                'error': 'Speech Client is not initialized'
+                'error': 'Speech Client is not initialized. Check credentials.'
             }), 500
         
         if 'file' not in request.files:
@@ -68,6 +72,7 @@ def transcribe():
             'transcript': transcript.strip()
         })
     except Exception as e:
+        print(f"DEBUG: Error in /transcribe: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
