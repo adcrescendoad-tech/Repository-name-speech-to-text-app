@@ -26,6 +26,10 @@ credentials_dict = {
 credentials = service_account.Credentials.from_service_account_info(credentials_dict)
 client = speech_v1.SpeechClient(credentials=credentials)
 
+@app.route('/', methods=['GET'])
+def index():
+    return jsonify({'message': 'Speech to Text API is running!'})
+
 @app.route('/transcribe', methods=['POST'])
 def transcribe():
     try:
