@@ -4,16 +4,30 @@ from google.cloud import speech_v1
 from google.oauth2 import service_account
 import os
 import json
+import traceback
 
 app = Flask(__name__)
 CORS(app, resources={r"/transcribe": {"origins": "*"}})
 
 # 秘密鍵を環境変数から読み込む
 CREDENTIALS_JSON = os.environ.get('GOOGLE_CREDENTIALS', '{}')
-CREDENTIALS_DICT = json.loads(CREDENTIALS_JSON)
+print(f"DEBUG: CREDENTIALS_JSON length = {len(CREDENTIALS_JSON)}")
 
-credentials = service_account.Credentials.from_service_account_info(CREDENTIALS_DICT)
-client = speech_v1.SpeechClient(credentials=credentials)
+try:
+    CREDENTIALS_DICT = json.loads(CREDENTIALS_JSON)
+    print(f"DEBUG: CREDENTIALS_DICT keys = {CREDENTIALS_DICT.keys()}")
+except json.JSONDecodeError as e:
+    print(f"ERROR: Failed to parse CREDENTIALS_JSON: {e}")
+    CREDENTIALS_DICT = {}
+
+try:
+    credentials = service_account.Credentials.from_service_account_info(CREDENTIALS_DICT)
+    client = speech_v1.SpeechClient(credentials=credentials)
+    print("DEBUG: Google Cloud client initialized successfully")
+except Exception as e:
+    print(f"ERROR: Failed to initialize Google Cloud client: {e}")
+    print(traceback.format_exc())
+    client = None
 
 @app.route('/', methods=['GET'])
 def index():
@@ -22,12 +36,16 @@ def index():
 @app.route('/transcribe', methods=['POST'])
 def transcribe():
     try:
+        print("DEBUG: transcribe endpoint called")
+        
         if 'file' not in request.files:
             return jsonify({'error': 'ファイルが見つかりません'}), 400
         
         file = request.files['file']
         if file.filename == '':
             return jsonify({'error': 'ファイル名が空です'}), 400
+        
+        print(f"DEBUG: File received: {file.filename}")
         
         audio_data = file.read()
         audio = speech_v1.RecognitionAudio(content=audio_data)
@@ -39,17 +57,21 @@ def transcribe():
             enable_automatic_punctuation=True,
         )
         
+        print("DEBUG: Calling Google Cloud Speech API")
         response = client.recognize(config=config, audio=audio)
         transcript = ""
         for result in response.results:
             if result.alternatives:
                 transcript += result.alternatives[0].transcript + " "
         
+        print(f"DEBUG: Transcription result: {transcript}")
         return jsonify({
             'success': True,
             'transcript': transcript.strip()
         })
     except Exception as e:
+        print(f"ERROR: {e}")
+        print(traceback.format_exc())
         return jsonify({
             'success': False,
             'error': str(e)
