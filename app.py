@@ -4,7 +4,7 @@ from google.cloud import speech_v1
 from google.oauth2 import service_account
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/transcribe": {"origins": "*"}})
 
 CREDENTIALS_DICT = {
     "type": "service_account",
