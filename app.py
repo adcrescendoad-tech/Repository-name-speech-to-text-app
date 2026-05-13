@@ -1,85 +1,213 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from google.cloud import speech_v1
-from google.oauth2 import service_account
 import os
 import json
-import traceback
+from google.cloud import speech_v1
+from google.oauth2 import service_account
+import logging
+
+# ログ設定
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app, resources={r"/transcribe": {"origins": "*"}})
+CORS(app)
 
-# 秘密鍵を環境変数から読み込む
-CREDENTIALS_JSON = os.environ.get('GOOGLE_CREDENTIALS', '{}')
-print(f"DEBUG: CREDENTIALS_JSON length = {len(CREDENTIALS_JSON)}")
+# Google Cloud 設定
+GOOGLE_PROJECT_ID = '112157322322172200'
+GOOGLE_SERVICE_ACCOUNT = 'speech-to-text-api@smooth-league-391605.iam.gserviceaccount.com'
 
-try:
-    CREDENTIALS_DICT = json.loads(CREDENTIALS_JSON)
-    print(f"DEBUG: CREDENTIALS_DICT keys = {CREDENTIALS_DICT.keys()}")
-except json.JSONDecodeError as e:
-    print(f"ERROR: Failed to parse CREDENTIALS_JSON: {e}")
-    CREDENTIALS_DICT = {}
+# アップロード用の一時ディレクトリ
+UPLOAD_FOLDER = './uploads'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
-try:
-    credentials = service_account.Credentials.from_service_account_info(CREDENTIALS_DICT)
-    client = speech_v1.SpeechClient(credentials=credentials)
-    print("DEBUG: Google Cloud client initialized successfully")
-except Exception as e:
-    print(f"ERROR: Failed to initialize Google Cloud client: {e}")
-    print(traceback.format_exc())
-    client = None
+# Google Speech-to-Text クライアント初期化
+speech_client = None
 
-@app.route('/', methods=['GET'])
+def init_google_client():
+    """Google Speech-to-Text クライアント初期化"""
+    global speech_client
+    try:
+        # 環境変数から認証情報を取得（JSON 文字列）
+        creds_json = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON')
+        if creds_json:
+            try:
+                creds_dict = json.loads(creds_json)
+                credentials = service_account.Credentials.from_service_account_info(creds_dict)
+                speech_client = speech_v1.SpeechClient(credentials=credentials)
+                logger.info('✅ Google Speech-to-Text クライアント初期化成功（環境変数から）')
+                return True
+            except Exception as e:
+                logger.warning(f'環境変数の JSON パース失敗: {e}')
+        
+        # ファイルから認証情報を取得
+        creds_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+        if creds_path and os.path.exists(creds_path):
+            credentials = service_account.Credentials.from_service_account_file(creds_path)
+            speech_client = speech_v1.SpeechClient(credentials=credentials)
+            logger.info(f'✅ Google Speech-to-Text クライアント初期化成功（ファイルから: {creds_path}）')
+            return True
+        
+        logger.warning('❌ Google 認証ファイルが見つかりません')
+        return False
+    
+    except Exception as e:
+        logger.error(f'❌ Google 認証初期化エラー: {e}')
+        return False
+
+
+@app.route('/')
 def index():
-    return jsonify({'message': 'Speech to Text API is running!'})
+    """index.html を配信"""
+    try:
+        with open('index.html', 'r', encoding='utf-8') as f:
+            return f.read(), 200, {'Content-Type': 'text/html; charset=utf-8'}
+    except FileNotFoundError:
+        return jsonify({'error': 'index.html not found'}), 404
+
 
 @app.route('/transcribe', methods=['POST'])
 def transcribe():
+    """音声ファイルを Google Speech-to-Text API でトランスクリプション"""
     try:
-        print("DEBUG: transcribe endpoint called")
-        
         if 'file' not in request.files:
-            return jsonify({'error': 'ファイルが見つかりません'}), 400
-        
+            return jsonify({'error': 'ファイルが選択されていません', 'success': False}), 400
+
         file = request.files['file']
         if file.filename == '':
-            return jsonify({'error': 'ファイル名が空です'}), 400
-        
-        print(f"DEBUG: File received: {file.filename}")
-        
-        audio_data = file.read()
-        audio = speech_v1.RecognitionAudio(content=audio_data)
-        
-        config = speech_v1.RecognitionConfig(
-            encoding=speech_v1.RecognitionConfig.AudioEncoding.LINEAR16,
-            sample_rate_hertz=16000,
-            language_code="ja-JP",
-            enable_automatic_punctuation=True,
-        )
-        
-        print("DEBUG: Calling Google Cloud Speech API")
-        response = client.recognize(config=config, audio=audio)
-        transcript = ""
-        for result in response.results:
-            if result.alternatives:
-                transcript += result.alternatives[0].transcript + " "
-        
-        print(f"DEBUG: Transcription result: {transcript}")
+            return jsonify({'error': 'ファイルが選択されていません', 'success': False}), 400
+
+        # ファイル形式チェック
+        allowed_extensions = {'.m4a', '.mp3', '.wav', '.flac', '.ogg', '.webm'}
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        if file_ext not in allowed_extensions:
+            return jsonify({
+                'error': f'対応形式: {", ".join(allowed_extensions)}',
+                'success': False
+            }), 400
+
+        logger.info(f'📝 処理開始: {file.filename}')
+
+        # ファイルをメモリに読み込み
+        file_content = file.read()
+        file_size_mb = len(file_content) / (1024 * 1024)
+        logger.info(f'📦 ファイルサイズ: {file_size_mb:.2f} MB')
+
+        # Google Speech-to-Text API でトランスクリプション
+        logger.info('🔄 Google Speech-to-Text API で処理中...')
+        transcript = transcribe_with_google(file_content, file.filename)
+
+        if not transcript:
+            logger.warning('⚠️ トランスクリプション取得失敗')
+            return jsonify({
+                'error': 'トランスクリプション取得失敗（API エラー）',
+                'success': False,
+                'transcript': '[処理失敗]'
+            }), 500
+
+        logger.info('✅ トランスクリプション完了')
         return jsonify({
             'success': True,
-            'transcript': transcript.strip()
-        })
+            'transcript': transcript,
+            'status': 'completed',
+            'filename': file.filename
+        }), 200
+
     except Exception as e:
-        print(f"ERROR: {e}")
-        print(traceback.format_exc())
+        logger.error(f'❌ エラー発生: {str(e)}')
+        import traceback
+        traceback.print_exc()
         return jsonify({
-            'success': False,
-            'error': str(e)
+            'error': f'エラー: {str(e)}',
+            'success': False
         }), 500
+
+
+def transcribe_with_google(audio_content, filename):
+    """Google Speech-to-Text API を使用してトランスクリプション"""
+    try:
+        if not speech_client:
+            logger.error('❌ Google Speech-to-Text クライアントが初期化されていません')
+            return None
+
+        file_ext = os.path.splitext(filename)[1].lower()
+        
+        encoding_map = {
+            '.m4a': speech_v1.RecognitionConfig.AudioEncoding.MP3,
+            '.mp3': speech_v1.RecognitionConfig.AudioEncoding.MP3,
+            '.wav': speech_v1.RecognitionConfig.AudioEncoding.LINEAR16,
+            '.flac': speech_v1.RecognitionConfig.AudioEncoding.FLAC,
+            '.ogg': speech_v1.RecognitionConfig.AudioEncoding.OGG_OPUS,
+        }
+        
+        encoding = encoding_map.get(file_ext, speech_v1.RecognitionConfig.AudioEncoding.LINEAR16)
+
+        config = speech_v1.RecognitionConfig(
+            encoding=encoding,
+            language_code='ja-JP',
+            enable_automatic_punctuation=True,
+            sample_rate_hertz=None,
+        )
+
+        audio = speech_v1.RecognitionAudio(content=audio_content)
+
+        logger.info(f'🎤 API に送信中... ({len(audio_content)} bytes)')
+
+        try:
+            response = speech_client.recognize(config=config, audio=audio)
+        except Exception as e:
+            logger.warning(f'⚠️ recognize() 失敗: {e}')
+            logger.info('💡 long_running_recognize を試行中...')
+            operation = speech_client.long_running_recognize(config=config, audio=audio)
+            response = operation.result(timeout=300)
+
+        transcript_list = []
+        for result in response.results:
+            if result.alternatives:
+                alt_text = result.alternatives[0].transcript
+                logger.info(f'📌 認識結果: {alt_text}')
+                transcript_list.append(alt_text)
+
+        transcript = ' '.join(transcript_list).strip()
+        
+        if not transcript:
+            logger.warning('⚠️ 空のトランスクリプション')
+            return None
+
+        logger.info(f'✅ 完了: {len(transcript)} 文字')
+        return transcript
+
+    except Exception as e:
+        logger.error(f'❌ Google Speech-to-Text エラー: {str(e)}')
+        import traceback
+        traceback.print_exc()
+        return None
+
 
 @app.route('/health', methods=['GET'])
 def health():
-    return jsonify({'status': 'ok'})
+    """ヘルスチェック"""
+    google_status = 'connected' if speech_client else 'not configured'
+    return jsonify({
+        'status': 'ok',
+        'message': 'Server is running',
+        'google_api': google_status,
+        'project_id': GOOGLE_PROJECT_ID
+    }), 200
+
 
 if __name__ == '__main__':
-    app.run(debug=False, host='0.0.0.0', port=8080)
+    logger.info('=' * 60)
+    logger.info('🚀 研修レポート作成アプリ サーバー起動')
+    logger.info('=' * 60)
+    logger.info(f'📍 Google Project ID: {GOOGLE_PROJECT_ID}')
+    
+    if init_google_client():
+        logger.info('✅ Google Speech-to-Text API: 準備完了')
+    else:
+        logger.warning('⚠️ Google Speech-to-Text API: 未設定')
+    
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
