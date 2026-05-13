@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
 import json
@@ -61,11 +61,7 @@ def init_google_client():
 @app.route('/')
 def index():
     """index.html を配信"""
-    try:
-        with open('index.html', 'r', encoding='utf-8') as f:
-            return f.read(), 200, {'Content-Type': 'text/html; charset=utf-8'}
-    except FileNotFoundError:
-        return jsonify({'error': 'index.html not found'}), 404
+    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), 'index.html')
 
 
 @app.route('/transcribe', methods=['POST'])
