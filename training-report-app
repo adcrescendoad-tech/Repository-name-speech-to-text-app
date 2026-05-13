@@ -1,0 +1,7 @@
+cd C:\Users\Owner\Desktop\研修レポートアプリ
+git init
+git add .
+git commit -m "Initial commit"
+git branch -M main
+git remote add origin https://github.com/【あなたのユーザー名】/training-report-app.git
+git push -u origin main
