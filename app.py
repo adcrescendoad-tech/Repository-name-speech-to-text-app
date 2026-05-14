@@ -6,15 +6,21 @@ import json
 
 app = Flask(__name__)
 
-def add_cors_headers(response):
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS, PUT, DELETE'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-    return response
+@app.before_request
+def handle_preflight():
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS, PUT, DELETE'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        return response
 
 @app.after_request
 def after_request(response):
-    return add_cors_headers(response)
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS, PUT, DELETE'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    return response
 
 try:
     creds_json = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON', '{}')
@@ -31,17 +37,21 @@ def transcribe():
     if request.method == 'OPTIONS':
         return '', 200
     
-    file = request.files['file']
-    audio_data = file.read()
-    audio = speech_v1.RecognitionAudio(content=audio_data)
-    config = speech_v1.RecognitionConfig(
-        encoding=speech_v1.RecognitionConfig.AudioEncoding.LINEAR16,
-        language_code='ja-JP',
-        enable_automatic_punctuation=True,
-    )
-    response = client.recognize(config=config, audio=audio)
-    transcript = ' '.join([result.alternatives[0].transcript for result in response.results if result.alternatives])
-    return jsonify({'success': True, 'transcript': transcript})
+    try:
+        file = request.files['file']
+        audio_data = file.read()
+        audio = speech_v1.RecognitionAudio(content=audio_data)
+        config = speech_v1.RecognitionConfig(
+            encoding=speech_v1.RecognitionConfig.AudioEncoding.LINEAR16,
+            language_code='ja-JP',
+            enable_automatic_punctuation=True,
+        )
+        response = client.recognize(config=config, audio=audio)
+        transcript = ' '.join([result.alternatives[0].transcript for result in response.results if result.alternatives])
+        return jsonify({'success': True, 'transcript': transcript})
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/health', methods=['GET'])
 def health():
