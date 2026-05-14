@@ -6,7 +6,7 @@ import os
 import json
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"], "allow_headers": ["Content-Type"]}})
 
 try:
     creds_json = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON', '{}')
@@ -18,15 +18,11 @@ except Exception as e:
     print(f"⚠️ Google 認証エラー: {e}")
     client = None
 
-@app.route('/')
-@app.route('/index.html')
-def index():
-    print("📄 index() called")
-    with open('index.html', 'r', encoding='utf-8') as f:
-        return f.read()
-
-@app.route('/transcribe', methods=['POST'])
+@app.route('/transcribe', methods=['POST', 'OPTIONS'])
 def transcribe():
+    if request.method == 'OPTIONS':
+        return '', 200
+    
     file = request.files['file']
     audio_data = file.read()
     audio = speech_v1.RecognitionAudio(content=audio_data)
@@ -45,5 +41,4 @@ def health():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
-    print(f"🚀 Starting on port {port}")
     app.run(host='0.0.0.0', port=port, debug=False)
