@@ -8,7 +8,6 @@ import json
 app = Flask(__name__)
 CORS(app)
 
-# Google 認証初期化
 try:
     creds_json = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON', '{}')
     creds_dict = json.loads(creds_json)
@@ -20,7 +19,9 @@ except Exception as e:
     client = None
 
 @app.route('/')
+@app.route('/index.html')
 def index():
+    print("📄 index() called")
     with open('index.html', 'r', encoding='utf-8') as f:
         return f.read()
 
@@ -44,4 +45,5 @@ def health():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
+    print(f"🚀 Starting on port {port}")
     app.run(host='0.0.0.0', port=port, debug=False)
