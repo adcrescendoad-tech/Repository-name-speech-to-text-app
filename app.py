@@ -5,8 +5,16 @@ app = Flask(__name__)
 
 @app.route('/')
 def index():
-    with open('/app/static/index.html', 'r', encoding='utf-8') as f:
-        return f.read()
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head><title>Test</title></head>
+    <body>
+        <h1>✅ Flask is working!</h1>
+        <p>If you see this, the app is running.</p>
+    </body>
+    </html>
+    '''
 
 @app.route('/health')
 def health():
