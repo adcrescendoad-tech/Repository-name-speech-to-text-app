@@ -1,12 +1,20 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS
 from google.cloud import speech_v1
 from google.oauth2 import service_account
 import os
 import json
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"], "allow_headers": ["Content-Type"]}})
+
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS, PUT, DELETE'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    return response
+
+@app.after_request
+def after_request(response):
+    return add_cors_headers(response)
 
 try:
     creds_json = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON', '{}')
