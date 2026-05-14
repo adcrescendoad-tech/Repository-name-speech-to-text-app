@@ -1,9 +1,10 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from google.cloud import speech_v1
 from google.oauth2 import service_account
 import os
 import json
+import io
 
 app = Flask(__name__)
 CORS(app)
@@ -19,18 +20,32 @@ except Exception as e:
     print(f"⚠️ Google 認証エラー: {e}")
     client = None
 
-@app.route('/')
+@app.route('/', methods=['GET'])
 def index():
-    """index.html を配信（絶対パス使用）"""
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    index_path = os.path.join(base_dir, 'index.html')
-    
+    """index.html を配信"""
     try:
-        with open(index_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        return content, 200, {'Content-Type': 'text/html; charset=utf-8'}
-    except FileNotFoundError:
-        return f"<h1>Error: index.html not found at {index_path}</h1>", 404
+        # Docker 内のコンテナパス
+        paths = [
+            os.path.join(os.path.dirname(__file__), 'index.html'),
+            os.path.join(os.path.dirname(__file__), 'static', 'index.html'),
+            '/app/index.html',
+            '/app/static/index.html'
+        ]
+        
+        for path in paths:
+            if os.path.exists(path):
+                print(f"📄 Found index.html at: {path}")
+                with open(path, 'r', encoding='utf-8') as f:
+                    return f.read(), 200, {'Content-Type': 'text/html; charset=utf-8'}
+        
+        # ファイルが見つからない場合はエラー表示
+        msg = f"❌ index.html not found. Tried: {', '.join(paths)}"
+        print(msg)
+        return f"<h1>{msg}</h1>", 404
+        
+    except Exception as e:
+        print(f"❌ Error reading index.html: {e}")
+        return f"<h1>Error: {str(e)}</h1>", 500
 
 @app.route('/transcribe', methods=['POST'])
 def transcribe():
@@ -57,6 +72,7 @@ def transcribe():
         
         return jsonify({'success': True, 'transcript': transcript}), 200
     except Exception as e:
+        print(f"❌ Transcribe error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/health', methods=['GET'])
