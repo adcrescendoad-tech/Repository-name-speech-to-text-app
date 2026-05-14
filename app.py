@@ -54,7 +54,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         }
         label {
             display: block;
-            margin-below: 8px;
+            margin-bottom: 8px;
             color: #555;
             font-weight: 500;
         }
@@ -314,6 +314,9 @@ def recognize():
         })
 
     except Exception as e:
+        import traceback
+        error_msg = traceback.format_exc()
+        print(f"ERROR in /recognize: {error_msg}", flush=True)
         return jsonify({
             'success': False,
             'error': str(e)
