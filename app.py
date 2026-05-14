@@ -6,18 +6,29 @@ from google.oauth2 import service_account
 
 app = Flask(__name__)
 
-# Google Cloud Speech-to-Text の認証
 def get_speech_client():
     """Google Speech-to-Text クライアントを取得"""
-    creds_json = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON')
-    if not creds_json:
+    credentials_json_str = os.getenv('GOOGLE_APPLICATION_CREDENTIALS_JSON')
+    
+    if not credentials_json_str:
+        print("ERROR: GOOGLE_APPLICATION_CREDENTIALS_JSON is not set")
         raise ValueError("GOOGLE_APPLICATION_CREDENTIALS_JSON not set")
     
-    creds_dict = json.loads(creds_json)
-    credentials = service_account.Credentials.from_service_account_info(creds_dict)
-    return speech_v1.SpeechClient(credentials=credentials)
+    try:
+        print(f"DEBUG: Attempting to parse credentials (length: {len(credentials_json_str)})")
+        credentials_dict = json.loads(credentials_json_str)
+        print(f"DEBUG: Successfully parsed JSON. Keys: {list(credentials_dict.keys())}")
+        credentials = service_account.Credentials.from_service_account_info(credentials_dict)
+        client = speech_v1.SpeechClient(credentials=credentials)
+        print("SUCCESS: Speech client initialized successfully")
+        return client
+    except json.JSONDecodeError as e:
+        print(f"ERROR: JSON decode error: {str(e)}")
+        raise ValueError(f"JSON parse error: {str(e)}")
+    except Exception as e:
+        print(f"ERROR: {str(e)}")
+        raise
 
-# HTML テンプレート
 HTML_TEMPLATE = '''<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -205,19 +216,16 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             const file = audioFile.files[0];
             if (!file) return;
 
-            // UI リセット
             errorDiv.classList.remove('show');
             resultBox.classList.remove('show');
             loadingDiv.classList.add('show');
 
             try {
-                // ファイルを Base64 に変換
                 const reader = new FileReader();
                 reader.onload = async (event) => {
                     const base64Audio = event.target.result.split(',')[1];
                     const language = languageInput.value || 'ja-JP';
 
-                    // サーバーに送信
                     const response = await fetch('/recognize', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -234,7 +242,6 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
                         resultText.textContent = data.text || '(認識結果なし)';
                         resultBox.classList.add('show');
                         
-                        // グローバル変数に保存（Excel エクスポート用）
                         window.lastResult = {
                             text: data.text,
                             language: language,
@@ -253,7 +260,6 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             }
         });
 
-        // Excel エクスポート
         exportBtn.addEventListener('click', () => {
             if (!window.lastResult) return;
 
@@ -278,6 +284,19 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
 def index():
     return render_template_string(HTML_TEMPLATE)
 
+@app.route('/health', methods=['GET'])
+def health():
+    """ヘルスチェック＆環境変数デバッグ"""
+    env_var_exists = 'GOOGLE_APPLICATION_CREDENTIALS_JSON' in os.environ
+    env_var_length = len(os.getenv('GOOGLE_APPLICATION_CREDENTIALS_JSON', ''))
+    
+    return jsonify({
+        'status': 'healthy',
+        'env_var_set': env_var_exists,
+        'env_var_length': env_var_length,
+        'timestamp': str(__import__('datetime').datetime.now())
+    })
+
 @app.route('/recognize', methods=['POST'])
 def recognize():
     """Google Speech-to-Text API で音声認識"""
@@ -289,7 +308,8 @@ def recognize():
         if not audio_base64:
             return jsonify({'success': False, 'error': 'No audio provided'}), 400
 
-        # Google Speech-to-Text API を呼び出し
+        print(f"DEBUG: Processing audio (language: {language_code})")
+        
         client = get_speech_client()
         
         audio = speech_v1.RecognitionAudio(content=bytes(audio_base64, 'utf-8'))
@@ -302,12 +322,13 @@ def recognize():
 
         response = client.recognize(config=config, audio=audio)
         
-        # 結果を集約
         transcript = ''
         for result in response.results:
             for alternative in result.alternatives:
                 transcript += alternative.transcript + ' '
 
+        print(f"DEBUG: Recognition completed. Result: {transcript[:50]}...")
+        
         return jsonify({
             'success': True,
             'text': transcript.strip() or '(認識結果なし)'
@@ -316,15 +337,11 @@ def recognize():
     except Exception as e:
         import traceback
         error_msg = traceback.format_exc()
-        print(f"ERROR in /recognize: {error_msg}", flush=True)
+        print(f"ERROR in /recognize: {error_msg}")
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
-
-@app.route('/health')
-def health():
-    return jsonify({'status': 'ok'}), 200
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
