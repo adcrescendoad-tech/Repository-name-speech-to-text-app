@@ -54,7 +54,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         }
         label {
             display: block;
-            margin-bottom: 8px;
+            margin-below: 8px;
             color: #555;
             font-weight: 500;
         }
