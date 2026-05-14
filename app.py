@@ -24,27 +24,26 @@ except Exception as e:
 def index():
     """index.html を配信"""
     try:
-        # Docker 内のコンテナパス
-        paths = [
-            os.path.join(os.path.dirname(__file__), 'index.html'),
-            os.path.join(os.path.dirname(__file__), 'static', 'index.html'),
-            '/app/index.html',
-            '/app/static/index.html'
-        ]
+        # 現在のディレクトリを確認
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        print(f"📁 Current directory: {current_dir}")
+        print(f"📂 Files in /app: {os.listdir('/app')}")
         
-        for path in paths:
-            if os.path.exists(path):
-                print(f"📄 Found index.html at: {path}")
-                with open(path, 'r', encoding='utf-8') as f:
-                    return f.read(), 200, {'Content-Type': 'text/html; charset=utf-8'}
+        index_path = os.path.join(current_dir, 'index.html')
+        print(f"🔍 Looking for index.html at: {index_path}")
         
-        # ファイルが見つからない場合はエラー表示
-        msg = f"❌ index.html not found. Tried: {', '.join(paths)}"
-        print(msg)
-        return f"<h1>{msg}</h1>", 404
+        if os.path.exists(index_path):
+            print(f"✅ Found index.html at: {index_path}")
+            with open(index_path, 'r', encoding='utf-8') as f:
+                return f.read(), 200, {'Content-Type': 'text/html; charset=utf-8'}
+        else:
+            print(f"❌ index.html NOT found at: {index_path}")
+            return f"<h1>❌ index.html not found at {index_path}</h1><p>Files: {os.listdir(current_dir)}</p>", 404
         
     except Exception as e:
-        print(f"❌ Error reading index.html: {e}")
+        print(f"❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
         return f"<h1>Error: {str(e)}</h1>", 500
 
 @app.route('/transcribe', methods=['POST'])
