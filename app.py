@@ -60,12 +60,22 @@ def transcribe():
         content = file.read()
         logger.info(f"Received file: {file.filename}, size: {len(content)} bytes")
         
-        # pydubを使って音声をLINEAR16 wavフォーマットに変換
-        audio = AudioSegment.from_file(io.BytesIO(content))
-        wav_io = io.BytesIO()
-        # 音声認識の精度を高めるため、モノラル（1チャンネル）で出力
-        audio.set_channels(1).export(wav_io, format='wav')
-        wav_data = wav_io.getvalue()
+        # ファイル拡張子からフォーマットを推測
+        ext = file.filename.split('.')[-1].lower()
+        if ext == 'm4a':
+            audio = AudioSegment.from_file(io.BytesIO(content), format='m4a')
+        elif ext == 'mp3':
+            audio = AudioSegment.from_file(io.BytesIO(content), format='mp3')
+        elif ext == 'wav':
+            audio = AudioSegment.from_file(io.BytesIO(content), format='wav')
+        elif ext == 'flac':
+            audio = AudioSegment.from_file(io.BytesIO(content), format='flac')
+        elif ext == 'ogg':
+            audio = AudioSegment.from_file(io.BytesIO(content), format='ogg')
+        else:
+            audio = AudioSegment.from_file(io.BytesIO(content))
+            
+        logger.info(f"Audio duration: {len(audio)/1000} seconds, channels: {audio.channels}, frame_rate: {audio.frame_rate}")
         
         client = speech_v1.SpeechClient(credentials=credentials)
         config = speech_v1.RecognitionConfig(
@@ -73,12 +83,25 @@ def transcribe():
             sample_rate_hertz=audio.frame_rate,
             language_code='ja-JP'
         )
-        audio_obj = speech_v1.RecognitionAudio(content=wav_data)
         
-        # 音声認識を実行
-        response = client.recognize(config=config, audio=audio_obj)
+        # Google Speech APIの同期認識は1分制限があるため、59秒ごとに分割処理する
+        chunk_length_ms = 59000
+        chunks = [audio[i:i + chunk_length_ms] for i in range(0, len(audio), chunk_length_ms)]
         
-        transcript = ' '.join([alt.transcript for result in response.results for alt in result.alternatives])
+        transcript = ""
+        for i, chunk in enumerate(chunks):
+            logger.info(f"Processing chunk {i+1}/{len(chunks)}")
+            wav_io = io.BytesIO()
+            # 音声認識の精度を高めるため、モノラル（1チャンネル）で出力
+            chunk.set_channels(1).export(wav_io, format='wav')
+            wav_data = wav_io.getvalue()
+            audio_obj = speech_v1.RecognitionAudio(content=wav_data)
+            
+            # 音声認識を実行
+            response = client.recognize(config=config, audio=audio_obj)
+            for result in response.results:
+                transcript += result.alternatives[0].transcript
+                
         logger.info("Transcription successful")
         
         parsed_data = {}
