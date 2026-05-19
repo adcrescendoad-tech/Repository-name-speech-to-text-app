@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文字起こしアプリ | 音声ファイルアップロード</title>
+    <!-- Tailwind CSSを使用してモダンなUIスタイリング -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .drag-active {
+            border-color: #3B82F6;
+            background-color: #EFF6FF;
+        }
+        .spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen text-gray-800 font-sans">
+    <div class="max-w-4xl mx-auto px-4 py-12">
+        <header class="text-center mb-12">
+            <h1 class="text-4xl font-extrabold text-blue-900 mb-4 tracking-tight">
+                <i class="fa-solid fa-microphone-lines text-blue-600 mr-2"></i>音声文字起こし
+            </h1>
+            <p class="text-gray-600">相談・助言記録等の音声をテキストに変換します</p>
+        </header>
+
+        <main class="bg-white rounded-2xl shadow-xl p-8 mb-8">
+            <!-- ファイルアップロード領域 -->
+            <div id="dropzone" class="border-4 border-dashed border-gray-200 rounded-xl p-12 text-center transition-all duration-200 mb-8 cursor-pointer hover:border-blue-400 hover:bg-blue-50 group">
+                <i class="fa-solid fa-cloud-arrow-up text-5xl text-gray-400 mb-4 group-hover:text-blue-500 transition-colors"></i>
+                <h3 class="text-xl font-bold mb-2">音声ファイルをドロップ</h3>
+                <p class="text-sm text-gray-500 mb-6">または、クリックしてファイルを選択 (WAV / M4A 形式対応)</p>
+                
+                <input type="file" id="fileInput" class="hidden" accept=".wav, .m4a, audio/wav, audio/x-m4a, audio/mp4">
+                <button onclick="document.getElementById('fileInput').click()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-full shadow-lg transition-transform transform hover:-translate-y-1">
+                    ファイルを選択する
+                </button>
+                <div id="selectedFileName" class="mt-4 text-sm font-medium text-blue-700 hidden"></div>
+            </div>
+
+            <!-- 実行ボタン領域 -->
+            <div class="text-center mb-8">
+                <button id="uploadBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-12 rounded-full shadow-lg transition-transform transform hover:-translate-y-1 w-full md:w-auto text-lg disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    <i class="fa-solid fa-language mr-2"></i>文字起こしを開始
+                </button>
+            </div>
+
+            <!-- ローディング領域 -->
+            <div id="loading" class="hidden text-center py-12">
+                <i class="fa-solid fa-circle-notch text-blue-500 text-5xl spinner mb-4"></i>
+                <p class="text-lg font-semibold text-gray-700 animate-pulse">AIが音声を解析しています...</p>
+                <p class="text-sm text-gray-500 mt-2">ファイルの長さによっては時間がかかる場合があります</p>
+            </div>
+
+            <!-- エラー表示領域 -->
+            <div id="error" class="hidden bg-red-50 border-l-4 border-red-500 p-4 mb-8 rounded-r-md">
+                <div class="flex items-center">
+                    <i class="fa-solid fa-circle-exclamation text-red-500 mr-3 text-xl"></i>
+                    <p id="errorMsg" class="text-red-700 font-medium"></p>
+                </div>
+            </div>
+
+            <!-- 結果表示領域 -->
+            <div id="resultArea" class="hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-file-lines text-gray-600 mr-2"></i>文字起こし結果</h2>
+                    <button id="copyBtn" class="text-gray-500 hover:text-blue-600 transition-colors bg-white px-3 py-1 rounded-md border shadow-sm" title="クリップボードにコピー">
+                        <i class="fa-regular fa-copy mr-1"></i> コピーする
+                    </button>
+                </div>
+                <div class="bg-gray-50 border border-gray-200 rounded-xl p-6 min-h-[200px]">
+                    <p id="transcriptText" class="text-gray-800 leading-relaxed whitespace-pre-wrap"></p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const selectedFileName = document.getElementById('selectedFileName');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const loading = document.getElementById('loading');
+        const errorDiv = document.getElementById('error');
+        const errorMsg = document.getElementById('errorMsg');
+        const resultArea = document.getElementById('resultArea');
+        const transcriptText = document.getElementById('transcriptText');
+        const copyBtn = document.getElementById('copyBtn');
+
+        let currentFile = null;
+
+        // ドラッグ＆ドロップイベント
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzone.addEventListener(eventName, () => {
+                dropzone.classList.add('drag-active');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, () => {
+                dropzone.classList.remove('drag-active');
+            }, false);
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            const files = e.dataTransfer.files;
+            handleFiles(files);
+        });
+
+        fileInput.addEventListener('change', function(e) {
+            handleFiles(this.files);
+        });
+
+        // ファイル選択の処理
+        function handleFiles(files) {
+            if (files.length > 0) {
+                currentFile = files[0];
+                selectedFileName.textContent = `選択中のファイル: ${currentFile.name}`;
+                selectedFileName.classList.remove('hidden');
+                uploadBtn.disabled = false;
+                
+                // エラーと結果をリセット
+                hideError();
+                resultArea.classList.add('hidden');
+            }
+        }
+
+        // 送信ボタンの処理
+        uploadBtn.addEventListener('click', async () => {
+            if (!currentFile) return;
+
+            hideError();
+            resultArea.classList.add('hidden');
+            uploadBtn.disabled = true;
+            loading.classList.remove('hidden');
+            
+            const formData = new FormData();
+            formData.append('file', currentFile);
+
+            try {
+                const response = await fetch('/transcribe', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    transcriptText.textContent = data.transcript;
+                    resultArea.classList.remove('hidden');
+                } else {
+                    showError(data.error || '不明なエラーが発生しました。');
+                }
+            } catch (err) {
+                showError('サーバーへの接続に失敗しました。');
+                console.error(err);
+            } finally {
+                loading.classList.add('hidden');
+                uploadBtn.disabled = false;
+            }
+        });
+
+        function showError(msg) {
+            errorMsg.textContent = msg;
+            errorDiv.classList.remove('hidden');
+        }
+
+        function hideError() {
+            errorDiv.classList.add('hidden');
+        }
+
+        // コピーボタンの処理
+        copyBtn.addEventListener('click', () => {
+            const text = transcriptText.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                const originalHtml = copyBtn.innerHTML;
+                copyBtn.innerHTML = '<i class="fa-solid fa-check text-green-500 mr-1"></i> コピー完了';
+                setTimeout(() => {
+                    copyBtn.innerHTML = originalHtml;
+                }, 2000);
+            }).catch(err => {
+                console.error('クリップボードへのコピーに失敗しました', err);
+            });
+        });
+    </script>
+</body>
+</html>
