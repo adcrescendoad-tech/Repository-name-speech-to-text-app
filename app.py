@@ -21,7 +21,7 @@ CORS(app)
 # 環境変数からシークレットキー（JSON文字列）を取得
 credentials = None
 try:
-    google_creds_json = os.environ.get('GOOGLE_CREDENTIALS_JSON')
+    google_creds_json = os.environ.get('GCP_SECRET_KEY_JSON')
     if google_creds_json:
         creds_dict = json.loads(google_creds_json)
         credentials = service_account.Credentials.from_service_account_info(creds_dict)
