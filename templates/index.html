@@ -471,7 +471,21 @@
                     
                     if (data.parsed_data && Object.keys(data.parsed_data).length > 0) {
                         const d = data.parsed_data;
-                        if (d.companyName && document.getElementById('companyName')) document.getElementById('companyName').value = d.companyName;
+                        if (d.visitDate) {
+                            const dateMatch = d.visitDate.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+                            if (dateMatch) {
+                                document.getElementById('visitYear').value = dateMatch[1];
+                                document.getElementById('visitMonth').value = dateMatch[2];
+                                document.getElementById('visitDay').value = dateMatch[3];
+                            }
+                        }
+                        if (d.officeNumber) document.getElementById('officeNumber').value = d.officeNumber;
+                        if (d.companyName) document.getElementById('companyName').value = d.companyName;
+                        if (d.address) document.getElementById('address').value = d.address;
+                        if (d.visitAddress) document.getElementById('visitAddress').value = d.visitAddress;
+                        if (d.phone) document.getElementById('phone').value = d.phone;
+                        if (d.contactPerson) document.getElementById('contactPerson').value = d.contactPerson;
+                        if (d.companyOverview) document.getElementById('companyOverview').value = d.companyOverview;
                         if (d.contactPerson && document.getElementById('clientName')) document.getElementById('clientName').value = d.contactPerson;
                         if (d.motivation && document.getElementById('motivation')) document.getElementById('motivation').value = d.motivation;
                         if (d.method && document.getElementById('method')) document.getElementById('method').value = d.method;
